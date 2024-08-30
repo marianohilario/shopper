@@ -1,0 +1,32 @@
+services:
+  shopper_pg:
+    image: postgres
+    container_name: shopper_pg
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  app:
+    build:
+      context: .
+    container_name: shopper_app
+    ports:
+      - 3000:3000
+    depends_on:
+      - shopper_pg
+    environment:
+      DB_HOST: shopper_pg
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    volumes:
+      - .:/app
+    command: npm run start:dev
