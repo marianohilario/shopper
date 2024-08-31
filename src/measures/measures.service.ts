@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -8,11 +10,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Measure } from './measure.entitty';
 import { Repository } from 'typeorm';
 import { Customer } from 'src/customers/customer.entity';
-import { CreateMeasureDto } from './dto/create-measure.dto/create-measure.dto';
+import { CreateMeasureDto } from './dto/create-measure.dto';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ConfigService } from '@nestjs/config';
 import { UUID } from 'crypto';
+import { ConfirmMeasureDto } from './dto/confirm-measure.dto';
+import { log } from 'console';
 const {
   GoogleGenerativeAI,
   HarmCategory,
@@ -69,7 +73,6 @@ export class MeasuresService {
       }
 
       fs.writeFileSync(filePath, buffer);
-      //   return `Imagen guardada como ${fileName}`;
     } catch (err) {
       console.error('Error al guardar la imagen:', err);
       throw err;
@@ -144,6 +147,92 @@ export class MeasuresService {
       image_url: filePath,
       measure_value: measureValue,
       measure_uuid: measure.id,
+    };
+  }
+
+  async confirmMeasure(confirmMeasureDto: ConfirmMeasureDto) {
+    const { measure_uuid, confirmed_value } = confirmMeasureDto;
+
+    const measure = await this.measureRepository.findOneBy({
+      id: measure_uuid,
+    });
+
+    if (!measure) {
+      throw new HttpException(
+        {
+          error_code: 'MEASURE_NOT_FOUND',
+          error_description: 'Leitura do mês já realizada',
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    if (measure.hasConfirmed) {
+      throw new ConflictException({
+        error_code: 'CONFIRMATION_DUPLICATE',
+        error_description: 'Leitura do mês já realizada',
+      });
+    }
+
+    measure.measureValue = confirmed_value;
+    measure.hasConfirmed = true;
+
+    await this.measureRepository.save(measure);
+
+    return { success: true };
+  }
+
+  async getMeasuresByCustomer(customer_code: UUID, measure_type: string) {
+    const customer = await this.customerRepository.findOneBy({
+      id: customer_code,
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    const existMeasures = await this.measureRepository.count({
+      where: { customer: { id: customer_code } },
+    });
+
+    if (!existMeasures) {
+      throw new NotFoundException({
+        error_code: 'MEASURES_NOT_FOUND',
+        error_description: 'Nenhuma leitura encontrada',
+      });
+    }
+
+    let query = this.measureRepository
+      .createQueryBuilder('measure')
+      .leftJoinAndSelect('measure.customer', 'customer')
+      .where('customer.id = :customerId', { customerId: customer.id });
+
+    if (measure_type) {
+      if (
+        measure_type.toUpperCase() !== 'WATER' &&
+        measure_type.toUpperCase() !== 'GAS'
+      ) {
+        throw new BadRequestException({
+          error_code: 'INVALID_TYPE',
+          error_description: 'Tipo de medição não permitida',
+        });
+      }
+      query = query.andWhere('measure.measureType = :measureType', {
+        measureType: measure_type.toUpperCase(),
+      });
+    }
+
+    const measures = await query.getMany();
+
+    return {
+      customer_code: customer.id,
+      measures: measures.map((measure) => ({
+        measure_uuid: measure.id,
+        measure_datetime: measure.measureDatetime,
+        measure_type: measure.measureType,
+        has_confirmed: measure.hasConfirmed,
+        image_url: measure.imageUrl,
+      })),
     };
   }
 

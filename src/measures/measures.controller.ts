@@ -7,10 +7,12 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { MeasuresService } from './measures.service';
-import { CreateMeasureDto } from './dto/create-measure.dto/create-measure.dto';
+import { CreateMeasureDto } from './dto/create-measure.dto';
 import { UUID } from 'crypto';
+import { ConfirmMeasureDto } from './dto/confirm-measure.dto';
 
 @Controller('measures')
 export class MeasuresController {
@@ -23,7 +25,20 @@ export class MeasuresController {
   }
 
   @Patch('confirm')
-  async confirmMeasure() {}
+  async confirmMeasure(@Body() confirmMeasureDto: ConfirmMeasureDto) {
+    return this.measuresService.confirmMeasure(confirmMeasureDto);
+  }
+
+  @Get(':customer_code/list')
+  async getMeasuresByCustomer(
+    @Param('customer_code') customer_code: UUID,
+    @Query('measure_type') measure_type: string,
+  ) {
+    return this.measuresService.getMeasuresByCustomer(
+      customer_code,
+      measure_type,
+    );
+  }
 
   @Get('images/:id')
   async getImages(@Param('id') id: UUID) {
