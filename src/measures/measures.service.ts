@@ -16,12 +16,7 @@ import * as fs from 'fs';
 import { ConfigService } from '@nestjs/config';
 import { UUID } from 'crypto';
 import { ConfirmMeasureDto } from './dto/confirm-measure.dto';
-import { log } from 'console';
-const {
-  GoogleGenerativeAI,
-  HarmCategory,
-  HarmBlockThreshold,
-} = require('@google/generative-ai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { GoogleAIFileManager } = require('@google/generative-ai/server');
 
 @Injectable()
@@ -178,6 +173,10 @@ export class MeasuresService {
     measure.hasConfirmed = true;
 
     await this.measureRepository.save(measure);
+
+    fs.rmSync(path.join(__dirname, '..', 'uploads', `${measure.imageUrl}`), {
+      force: true,
+    });
 
     return { success: true };
   }
